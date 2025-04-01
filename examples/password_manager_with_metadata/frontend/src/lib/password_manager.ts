@@ -32,8 +32,8 @@ export class PasswordManager {
     ): Promise<{ Ok: null } | { Err: string }> {
         const encryptedPassword = await this.encryptedMaps.encrypt_for(
             owner,
-            vault,
-            passwordName,
+            new TextEncoder().encode(vault),
+            new TextEncoder().encode(passwordName),
             password,
         );
         const maybeError =
@@ -52,25 +52,17 @@ export class PasswordManager {
         }
     }
 
-    async getDecryptedVaults(
-        owner: Principal,
-    ): Promise<{ Ok: VaultModel[] } | { Err: string }> {
+    async getDecryptedVaults(owner: Principal): Promise<VaultModel[]> {
         const vaultsSharedWithMe =
             await this.encryptedMaps.get_accessible_shared_map_names();
         const vaultsOwnedByMeResult =
             await this.encryptedMaps.get_owned_non_empty_map_names();
 
-        const vaultIds = new Array<[Principal, string]>();
-        for (const vaultNameBytes of vaultsOwnedByMeResult) {
-            const vaultName = new TextDecoder().decode(
-                Uint8Array.from(vaultNameBytes.inner),
-            );
+        const vaultIds = new Array<[Principal, Uint8Array]>();
+        for (const vaultName of vaultsOwnedByMeResult) {
             vaultIds.push([owner, vaultName]);
         }
-        for (const [otherOwner, vaultNameBytes] of vaultsSharedWithMe) {
-            const vaultName = new TextDecoder().decode(
-                Uint8Array.from(vaultNameBytes.inner),
-            );
+        for (const [otherOwner, vaultName] of vaultsSharedWithMe) {
             vaultIds.push([otherOwner, vaultName]);
         }
 
@@ -80,32 +72,36 @@ export class PasswordManager {
             const result =
                 await this.canisterClient.get_encrypted_values_for_map_with_metadata(
                     otherOwner,
-                    { inner: new TextEncoder().encode(vaultName) },
+                    { inner: vaultName },
                 );
             if ("Err" in result) {
                 throw new Error(result.Err);
             }
 
             const passwords = new Array<[string, PasswordModel]>();
+            const vaultNameString = new TextDecoder().decode(vaultName);
             for (const [
                 passwordNameBytebuf,
                 encryptedData,
                 passwordMetadata,
             ] of result.Ok) {
+                const passwordNameBytes = Uint8Array.from(
+                    passwordNameBytebuf.inner,
+                );
                 const passwordNameString = new TextDecoder().decode(
-                    Uint8Array.from(passwordNameBytebuf.inner),
+                    passwordNameBytes,
                 );
                 const data = await this.encryptedMaps.decrypt_for(
                     otherOwner,
                     vaultName,
-                    passwordNameString,
+                    passwordNameBytes,
                     Uint8Array.from(encryptedData.inner),
                 );
 
                 const passwordContent = new TextDecoder().decode(data);
                 const password = passwordFromContent(
                     otherOwner,
-                    vaultName,
+                    vaultNameString,
                     passwordNameString,
                     passwordContent,
                     passwordMetadata,
@@ -118,21 +114,18 @@ export class PasswordManager {
                     otherOwner,
                     vaultName,
                 );
-            if ("Err" in usersResult) {
-                throw new Error(usersResult.Err);
-            }
 
             vaults.push(
                 vaultFromContent(
                     otherOwner,
-                    vaultName,
+                    vaultNameString,
                     passwords,
-                    usersResult.Ok,
+                    usersResult,
                 ),
             );
         }
 
-        return { Ok: vaults };
+        return vaults;
     }
 
     async removePassword(
@@ -157,8 +150,7 @@ export class PasswordManager {
 export async function createPasswordManager(
     agentOptions?: HttpAgentOptions,
 ): Promise<PasswordManager> {
-    const { CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA } = process.env;
-    if (!CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA) {
+    if (!process.env.CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA) {
         console.error(
             "CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA is not defined",
         );
@@ -169,7 +161,7 @@ export async function createPasswordManager(
 
     const host =
         process.env.DFX_NETWORK === "ic"
-            ? `https://${CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA}.ic0.app`
+            ? `https://${process.env.CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA}.ic0.app`
             : "http://localhost:8000";
     const hostOptions = { host };
 
@@ -181,7 +173,7 @@ export async function createPasswordManager(
 
     const encryptedMaps = await createEncryptedMaps({ ...agentOptions });
     const canisterClient = createActor(
-        CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA,
+        process.env.CANISTER_ID_PASSWORD_MANAGER_WITH_METADATA,
         { agentOptions },
     );
 
