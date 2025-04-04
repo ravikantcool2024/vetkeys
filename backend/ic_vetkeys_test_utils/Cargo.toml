@@ -1,0 +1,23 @@
+[package]
+name = "ic-vetkeys-test-utils"
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+anyhow = { workspace = true }
+candid = { workspace = true }
+hex = { workspace = true }
+ic-stable-structures = { workspace = true }
+ic-vetkeys = { path = "../ic_vetkeys" }
+lazy_static = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+serde = { workspace = true }
+serde_bytes = { workspace = true }

@@ -1,0 +1,66 @@
+name: Frontend ic_vetkeys CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - frontend/ic_vetkeys/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/frontend_ic_vetkeys.yml
+      - .github/workflows/provision-darwin.sh
+      - .github/workflows/provision-linux.sh
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  frontend_ic_vetkeys_linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Provision Linux
+        run: bash .github/workflows/provision-linux.sh
+      - name: Frontend Tests and Lint
+        run: |
+          set -eExuo pipefail
+          npm install
+          pushd backend/canisters/ic_vetkeys_encrypted_maps_canister
+          dfx start --background
+          make mock
+          eval $(make export-cmd)
+          popd
+          pushd backend/canisters/ic_vetkeys_manager_canister
+          dfx start --background
+          make mock
+          eval $(make export-cmd)
+          popd
+          cd frontend/ic_vetkeys
+          npm run build
+          npm run test
+          npm run lint
+  frontend_ic_vetkeys_mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Provision Darwin
+        run: |
+          bash .github/workflows/provision-darwin.sh
+      - name: Frontend Tests and Lint
+        run: |
+          set -eExuo pipefail
+          npm install
+          pushd backend/canisters/ic_vetkeys_encrypted_maps_canister
+          dfx start --background
+          make mock
+          eval $(make export-cmd)
+          popd
+          pushd backend/canisters/ic_vetkeys_manager_canister
+          dfx start --background
+          make mock
+          eval $(make export-cmd)
+          popd
+          cd frontend/ic_vetkeys
+          npm run build
+          npm run test
+          npm run lint

@@ -1,0 +1,14 @@
+{
+    "canisters": {
+      "ic_vetkeys_manager_canister": {
+        "candid": "ic_vetkeys_manager_canister.did",
+        "package": "ic-vetkeys-manager-canister",
+        "type": "rust"
+      },
+      "chainkey_testing_canister": {
+        "type": "custom",
+        "candid": "https://github.com/dfinity/chainkey-testing-canister/releases/download/v0.1.0/chainkey_testing_canister.did",
+        "wasm": "https://github.com/dfinity/chainkey-testing-canister/releases/download/v0.1.0/chainkey_testing_canister.wasm.gz"
+      }
+    }
+  }

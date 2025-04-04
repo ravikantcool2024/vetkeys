@@ -1,14 +1,14 @@
 import "./init.ts";
 import { HttpAgent, type HttpAgentOptions } from "@dfinity/agent";
-import { DefaultEncryptedMapsClient } from "../../../../../sdk/ic_vetkd_sdk_encrypted_maps_example/src/index";
-import { EncryptedMaps } from "ic_vetkd_sdk_encrypted_maps/src";
+import { DefaultEncryptedMapsClient } from "ic_vetkeys/tools";
+import { EncryptedMaps } from "ic_vetkeys/tools";
 
 export async function createEncryptedMaps(
     agentOptions?: HttpAgentOptions,
 ): Promise<EncryptedMaps> {
     const host =
         process.env.DFX_NETWORK === "ic"
-            ? `https://${process.env.CANISTER_ID_ENCRYPTED_MAPS_EXAMPLE}.ic0.app`
+            ? `https://${process.env.CANISTER_ID_IC_VETKEYS_ENCRYPTED_MAPS_CANISTER}.ic0.app`
             : "http://localhost:8000";
     const hostOptions = { host };
 
@@ -35,7 +35,7 @@ export async function createEncryptedMaps(
     return new EncryptedMaps(
         new DefaultEncryptedMapsClient(
             agent,
-            process.env.CANISTER_ID_ENCRYPTED_MAPS_EXAMPLE,
+            process.env.CANISTER_ID_IC_VETKEYS_ENCRYPTED_MAPS_CANISTER,
         ),
     );
 }

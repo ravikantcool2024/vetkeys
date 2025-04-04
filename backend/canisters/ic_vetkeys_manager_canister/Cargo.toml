@@ -1,0 +1,32 @@
+[package]
+name = "ic-vetkeys-manager-canister"
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+ic-cdk-macros = { workspace = true }
+ic-stable-structures = { workspace = true }
+ic-vetkeys = { path = "../../ic_vetkeys" }
+serde = { workspace = true }
+
+[dev-dependencies]
+ic-vetkeys-test-utils = { path = "../../ic_vetkeys_test_utils" }
+ic-vetkd-utils = { workspace = true }
+pocket-ic = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+reqwest = "0.12.12"
+
+[features]
+expose-testing-api = ["ic-vetkeys/expose-testing-api"]
+
