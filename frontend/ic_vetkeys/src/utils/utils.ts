@@ -229,7 +229,7 @@ export function augmentedHashToG1(pk: DerivedPublicKey, message: Uint8Array): G1
  * This is the end product of executing the VetKD protocol.
  *
  * Internally a VetKey is a valid BLS signature for the bytestring
- * `derivation_id` which provided when calling the `vetkd_derive_encrypted_key`
+ * `input` which provided when calling the `vetkd_derive_encrypted_key`
  * management canister interface.
  *
  * For certain usages, such as a beacon, the VetKey is actually used directly.
@@ -424,7 +424,7 @@ export class EncryptedVetKey {
     /**
      * Decrypt the encrypted key returning a VetKey
      */
-    decryptAndVerify(tsk: TransportSecretKey, dpk: DerivedPublicKey, derivation_id: Uint8Array): VetKey {
+    decryptAndVerify(tsk: TransportSecretKey, dpk: DerivedPublicKey, input: Uint8Array): VetKey {
         // Check that c1 and c2 have the same discrete logarithm, ie that e(c1, g2) == e(g1, c2)
 
         const g1 = bls12_381.G1.ProjectivePoint.BASE;
@@ -442,7 +442,7 @@ export class EncryptedVetKey {
         const k = this.#c3.subtract(c1_tsk);
 
         // Verify that k is a valid BLS signature
-        const msg = augmentedHashToG1(dpk, derivation_id);
+        const msg = augmentedHashToG1(dpk, input);
         const check = bls12_381.pairingBatch([{ g1: k, g2: neg_g2}, { g1: msg, g2: dpk.getPoint() }]);
 
         const valid = bls12_381.fields.Fp12.eql(check, gt_one);
