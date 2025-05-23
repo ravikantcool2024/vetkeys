@@ -307,6 +307,40 @@ export function augmentedHashToG1(
 }
 
 /**
+ * Verify a BLS signature
+ *
+ * A VetKey is in the end a valid BLS signature; this function checks that a
+ * provided BLS signature is the valid one for the provided public key and
+ * message.
+ *
+ * When a VetKey struct is created (using EncryptedVetKey.decryptAndVerify) the signature
+ * is already verified, so using this function is only necessary when
+ * using a vetKey as a VRF or for threshold BLS signatures, with the bytes obtained
+ * from VetKey.signatureBytes.
+ */
+export function verifyBlsSignature(
+    pk: DerivedPublicKey,
+    message: Uint8Array,
+    signature: G1Point | Uint8Array,
+): boolean {
+    const neg_g2 = bls12_381.G2.ProjectivePoint.BASE.negate();
+    const gt_one = bls12_381.fields.Fp12.ONE;
+
+    const signaturePt =
+        signature instanceof bls12_381.G1.ProjectivePoint
+            ? signature
+            : bls12_381.G1.ProjectivePoint.fromHex(signature);
+
+    const messageG1 = augmentedHashToG1(pk, message);
+    const check = bls12_381.pairingBatch([
+        { g1: signaturePt, g2: neg_g2 },
+        { g1: messageG1, g2: pk.getPoint() },
+    ]);
+
+    return bls12_381.fields.Fp12.eql(check, gt_one);
+}
+
+/**
  * A VetKey (verifiably encrypted threshold key)
  *
  * This is the end product of executing the VetKD protocol.
@@ -566,22 +600,14 @@ export class EncryptedVetKey {
             throw new Error("Invalid VetKey");
         }
 
-        // Compute the purported vetkd k
+        // Compute the purported vetKey k
         const c1_tsk = this.#c1.multiply(
             bls12_381.G1.normPrivateKeyToScalar(tsk.getSecretKey()),
         );
         const k = this.#c3.subtract(c1_tsk);
 
         // Verify that k is a valid BLS signature
-        const msg = augmentedHashToG1(dpk, input);
-        const check = bls12_381.pairingBatch([
-            { g1: k, g2: neg_g2 },
-            { g1: msg, g2: dpk.getPoint() },
-        ]);
-
-        const valid = bls12_381.fields.Fp12.eql(check, gt_one);
-
-        if (valid) {
+        if (verifyBlsSignature(dpk, input, k)) {
             return new VetKey(k);
         } else {
             throw new Error("Invalid VetKey");
