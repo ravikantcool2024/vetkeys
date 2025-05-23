@@ -397,27 +397,118 @@ impl EncryptedVetKey {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// An identity, used for identity based encryption (IBE)
+///
+/// As far as the IBE scheme goes this is simply an opauqe bytestring
+/// We provide a type to make code using the IBE a bit easier to understand
+pub struct IbeIdentity {
+    val: Vec<u8>,
+}
+
+impl IbeIdentity {
+    /// Create an identity from an arbitrary byte string
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self {
+            val: bytes.to_vec(),
+        }
+    }
+
+    /// Create an identity from an arbitrary UTF8 string
+    pub fn from_string(str: &str) -> Self {
+        Self::from_bytes(str.as_bytes())
+    }
+
+    /// Create an identity from a Principal
+    pub fn from_principal(principal: &candid::Principal) -> Self {
+        Self::from_bytes(principal.as_slice())
+    }
+
+    /// Return the bytestring of this identity
+    pub fn value(&self) -> &[u8] {
+        &self.val
+    }
+}
+
+/*
+* Amount of randomness generated during the IBE encryption process
+*/
 const IBE_SEED_BYTES: usize = 32;
 
-const IBE_HEADER_BYTES: usize = 8;
-const IBE_HEADER: [u8; IBE_HEADER_BYTES] = [b'I', b'C', b' ', b'I', b'B', b'E', 0x00, 0x01];
+/// A random seed, used for identity based encryption
+pub struct IbeSeed {
+    val: [u8; IBE_SEED_BYTES],
+}
+
+impl IbeSeed {
+    /// Create a random seed for IBE encryption
+    pub fn random<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
+        use rand::Rng;
+        Self {
+            val: rng.gen::<[u8; IBE_SEED_BYTES]>(),
+        }
+    }
+
+    /// Create a seed for IBE encryption from a byte string
+    ///
+    /// This input should be randomly chosen by a secure random number generator.
+    /// If the seed is not securely generated the IBE scheme will be insecure.
+    ///
+    /// At least 128 bits (16 bytes) must be provided.
+    ///
+    /// If the input is exactly 256 bits it is used directly. Otherwise the input
+    /// is hashed with HKDF to produce a 256 bit seed.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        if bytes.len() < 16 {
+            return Err("Insufficient input material for IbeSeed derivation".to_string())
+        }
+
+        let mut val = [0u8; IBE_SEED_BYTES];
+        if bytes.len() == IBE_SEED_BYTES {
+            val.copy_from_slice(bytes)
+        } else {
+            let hkdf =
+                derive_symmetric_key(bytes, "ic-vetkd-bls12-381-ibe-hash-seed", IBE_SEED_BYTES);
+            val.copy_from_slice(&hkdf);
+        }
+
+        Ok(Self { val })
+    }
+
+    fn value(&self) -> &[u8; IBE_SEED_BYTES] {
+        &self.val
+    }
+}
+
+/*
+ * IBE ciphertexts are prefixed with a header to identity the protocol and provide
+ * an extension point if needed in the future eg for changing to a different cipher.
+ *
+ * The header consists of "IC IBE" (ASCII) plus two bytes 0x00 and 0x01 which
+ * here are just fixed and effectively arbitrary values, but could be used to
+ * indicate for example a version in the future should we need to support multiple
+ * variants of the IBE scheme.
+*/
+const IBE_HEADER: [u8; 8] = [b'I', b'C', b' ', b'I', b'B', b'E', 0x00, 0x01];
+
+const IBE_HEADER_BYTES: usize = IBE_HEADER.len();
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// An IBE (identity based encryption) ciphertext
-pub struct IBECiphertext {
+pub struct IbeCiphertext {
     header: Vec<u8>,
     c1: G2Affine,
     c2: [u8; IBE_SEED_BYTES],
     c3: Vec<u8>,
 }
 
-enum IBEDomainSep {
+enum IbeDomainSep {
     HashToMask,
     MaskSeed,
     MaskMsg(usize),
 }
 
-impl IBEDomainSep {
+impl IbeDomainSep {
     #[allow(clippy::inherent_to_string)]
     fn to_string(&self) -> String {
         match self {
@@ -434,7 +525,7 @@ impl IBEDomainSep {
     }
 }
 
-impl IBECiphertext {
+impl IbeCiphertext {
     /// Serialize this IBE ciphertext
     pub fn serialize(&self) -> Vec<u8> {
         let mut output =
@@ -451,9 +542,9 @@ impl IBECiphertext {
     /// Deserialize an IBE ciphertext
     ///
     /// Returns Err if the encoding is not valid
-    pub fn deserialize(bytes: &[u8]) -> Result<IBECiphertext, String> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, String> {
         if bytes.len() < IBE_HEADER_BYTES + G2AFFINE_BYTES + IBE_SEED_BYTES {
-            return Err("IBECiphertext too short to be valid".to_string());
+            return Err("IbeCiphertext too short to be valid".to_string());
         }
 
         let header = bytes[0..IBE_HEADER_BYTES].to_vec();
@@ -468,14 +559,14 @@ impl IBECiphertext {
         let c3 = bytes[IBE_HEADER_BYTES + G2AFFINE_BYTES + IBE_SEED_BYTES..].to_vec();
 
         if header != IBE_HEADER {
-            return Err("IBECiphertext has unknown header".to_string());
+            return Err("IbeCiphertext has unknown header".to_string());
         }
 
         Ok(Self { header, c1, c2, c3 })
     }
 
     fn hash_to_mask(header: &[u8], seed: &[u8; IBE_SEED_BYTES], msg: &[u8]) -> Scalar {
-        let domain_sep = IBEDomainSep::HashToMask;
+        let domain_sep = IbeDomainSep::HashToMask;
         let mut ro_input = Vec::with_capacity(seed.len() + msg.len());
         ro_input.extend_from_slice(header);
         ro_input.extend_from_slice(seed);
@@ -485,7 +576,7 @@ impl IBECiphertext {
     }
 
     fn mask_seed(seed: &[u8; IBE_SEED_BYTES], t: &Gt) -> [u8; IBE_SEED_BYTES] {
-        let domain_sep = IBEDomainSep::MaskSeed;
+        let domain_sep = IbeDomainSep::MaskSeed;
         let mask = derive_symmetric_key(&t.to_bytes(), &domain_sep.to_string(), IBE_SEED_BYTES);
 
         let mut masked_seed = [0u8; IBE_SEED_BYTES];
@@ -511,7 +602,7 @@ impl IBECiphertext {
             mask
         }
 
-        let domain_sep = IBEDomainSep::MaskMsg(msg.len());
+        let domain_sep = IbeDomainSep::MaskMsg(msg.len());
 
         let shake_seed = derive_symmetric_key(seed, &domain_sep.to_string(), 32);
 
@@ -528,36 +619,32 @@ impl IBECiphertext {
     ///
     /// The message can be of arbitrary length
     ///
-    /// The seed must be exactly 256 bits (32 bytes) long and should be
-    /// generated with a cryptographically secure random number generator. Do
-    /// not reuse the seed for encrypting another message or any other purpose.
+    /// The seed should be generated with a cryptographically secure random
+    /// number generator. Do not reuse the seed for encrypting another message
+    /// or any other purpose.
     ///
     /// To decrypt this message requires using the VetKey associated with the
     /// provided derived public key (ie the same master key and context string),
     /// and with an `input` equal to the provided `identity` parameter.
     pub fn encrypt(
         dpk: &DerivedPublicKey,
-        identity: &[u8],
+        identity: &IbeIdentity,
         msg: &[u8],
-        seed: &[u8],
-    ) -> Result<IBECiphertext, String> {
-        let seed: &[u8; IBE_SEED_BYTES] = seed
-            .try_into()
-            .map_err(|_e| format!("Provided seed must be {} bytes long ", IBE_SEED_BYTES))?;
-
+        seed: &IbeSeed,
+    ) -> Self {
         let header = IBE_HEADER.to_vec();
 
-        let t = Self::hash_to_mask(&header, seed, msg);
+        let t = Self::hash_to_mask(&header, seed.value(), msg);
 
-        let pt = augmented_hash_to_g1(&dpk.point, identity);
+        let pt = augmented_hash_to_g1(&dpk.point, identity.value());
 
         let tsig = ic_bls12_381::pairing(&pt, &dpk.point) * t;
 
         let c1 = G2Affine::from(G2Affine::generator() * t);
-        let c2 = Self::mask_seed(seed, &tsig);
-        let c3 = Self::mask_msg(msg, seed);
+        let c2 = Self::mask_seed(seed.value(), &tsig);
+        let c3 = Self::mask_msg(msg, seed.value());
 
-        Ok(Self { header, c1, c2, c3 })
+        Self { header, c1, c2, c3 }
     }
 
     /// Decrypt an IBE ciphertext
