@@ -2,7 +2,7 @@ use candid::CandidType;
 use ic_cdk::api::management_canister::main::CanisterId;
 use serde::{Deserialize, Serialize};
 
-#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum VetKDCurve {
     #[serde(rename = "bls12_381_g2")]
     #[allow(non_camel_case_types)]
