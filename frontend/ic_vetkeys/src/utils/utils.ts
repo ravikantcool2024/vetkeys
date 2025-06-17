@@ -290,12 +290,15 @@ function asBytes(input: Uint8Array | string): Uint8Array {
 /**
  * @internal derive a symmetric key from the provided input
  *
- * The `input` parameter should be a sufficiently long random input.
+ * The `input` parameter should be a sufficiently long random input generated
+ * in a secure way. 256 bits (32 bytes) or longer is preferable.
  *
  * The `domainSep` parameter should be a string unique to your application and
  * also your usage of the resulting key. For example say your application
  * "my-app" is deriving two keys, one for usage "foo" and the other for
  * "bar". You might use as domain separators "my-app-foo" and "my-app-bar".
+ *
+ * The returned Uint8Array will be `outputLength` bytes long.
  */
 export function deriveSymmetricKey(
     input: Uint8Array,
@@ -400,6 +403,8 @@ export class VetKey {
      * also your usage of the resulting key. For example say your application
      * "my-app" is deriving two keys, one for usage "foo" and the other for
      * "bar". You might use as domain separators "my-app-foo" and "my-app-bar".
+     *
+     * The returned Uint8Array will be `outputLength` bytes long.
      */
     deriveSymmetricKey(
         domainSep: Uint8Array | string,

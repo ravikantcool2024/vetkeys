@@ -25,6 +25,14 @@ const G1AFFINE_BYTES: usize = 48; // Size of compressed form
 const G2AFFINE_BYTES: usize = 96; // Size of compressed form
 
 /// Derive a symmetric key using HKDF-SHA256
+///
+/// The `input` parameter should be a sufficiently long random input generated
+/// in a secure way. 256 bits (32 bytes) or longer is preferable.
+///
+/// The `domain_sep` should be a string that uniquely identifies the
+/// context for which this key is used.
+///
+/// The returned vector will be `len` bytes long.
 pub fn derive_symmetric_key(input: &[u8], domain_sep: &str, len: usize) -> Vec<u8> {
     let hk = hkdf::Hkdf::<sha2::Sha256>::new(None, input);
     let mut okm = vec![0u8; len];
@@ -90,7 +98,7 @@ impl TransportSecretKey {
         self.secret_key.to_bytes().to_vec()
     }
 
-    /// Serialize this transport secret key to a bytestring
+    /// Deserialize this transport secret key from a bytestring
     pub fn deserialize(bytes: &[u8]) -> Result<Self, String> {
         if bytes.len() != 32 {
             return Err(format!(
