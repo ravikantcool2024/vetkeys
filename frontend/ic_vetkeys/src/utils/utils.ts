@@ -386,6 +386,12 @@ export function augmentedHashToG1(
  * provided BLS signature is the valid one for the provided public key and
  * message.
  *
+ * Specifically this verifies "augmented" BLS signature, which includes the
+ * public key of the signer as an input to the hash. This addition ensures that
+ * messages signed by different public keys are distinct.
+ *
+ * See section 3.2 of the IETF draft `draft-irtf-cfrg-bls-signature` for details.
+ *
  * When a VetKey struct is created (using EncryptedVetKey.decryptAndVerify) the signature
  * is already verified, so using this function is only necessary when
  * using a vetKey as a VRF or for threshold BLS signatures, with the bytes obtained
@@ -396,21 +402,29 @@ export function verifyBlsSignature(
     message: Uint8Array,
     signature: G1Point | Uint8Array,
 ): boolean {
-    const negG2 = bls12_381.G2.ProjectivePoint.BASE.negate();
-    const oneGt = bls12_381.fields.Fp12.ONE;
+    const publicKeyBytes = pk.publicKeyBytes();
 
-    const signaturePt =
-        signature instanceof bls12_381.G1.ProjectivePoint
-            ? signature
-            : bls12_381.G1.ProjectivePoint.fromHex(signature);
+    // We sign the concatenation of the public key and the message
+    const publicKeyAndMessage = new Uint8Array([...publicKeyBytes, ...message]);
 
-    const messageG1 = augmentedHashToG1(pk, message);
-    const check = bls12_381.pairingBatch([
-        { g1: signaturePt, g2: negG2 },
-        { g1: messageG1, g2: pk.getPoint() },
-    ]);
+    // The standard domain separator defined in section 4.2.2 of draft-irtf-cfrg-bls-signature
+    const domainSep = "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_AUG_";
 
-    return bls12_381.fields.Fp12.eql(check, oneGt);
+    const options = Object.assign(
+        {},
+        // @ts-expect-error (https://github.com/paulmillr/noble-curves/issues/179)
+        bls12_381.G1.CURVE.htfDefaults,
+        {
+            DST: domainSep,
+        },
+    ) as Opts;
+
+    return bls12_381.verifyShortSignature(
+        signature,
+        publicKeyAndMessage,
+        pk.getPoint(),
+        options,
+    );
 }
 
 /**
