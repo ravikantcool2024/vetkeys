@@ -36,7 +36,7 @@
     "@popperjs/core": "^2.11.8",
     "@sveltejs/vite-plugin-svelte": "^3.0.2",
     "@tailwindcss/postcss": "^4.0.6",
-    "@tailwindcss/vite": "^4.0.0",
+    "@tailwindcss/vite": "^4.1.18",
     "autoprefixer": "^10.4.20",
     "rollup-plugin-css-only": "^4.5.2",
     "svelte-icons": "^2.1.0",
